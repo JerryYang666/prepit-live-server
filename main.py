@@ -4,8 +4,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import socketio
 from deepgram import DeepgramClient, LiveTranscriptionEvents, LiveOptions
+from openai import OpenAI
+from anthropic import Anthropic
 import os
 import asyncio
+from io import BytesIO
+from ChatStream import ChatStream, ChatStreamModel
 
 DEV_PREFIX = "/dev"
 PROD_PREFIX = "/prod"
@@ -20,6 +24,9 @@ except FileNotFoundError:
 load_dotenv(dotenv_path="/run/secrets/prepit-secret")
 load_dotenv()
 dg_client = DeepgramClient(api_key="e787517287be850e46fbb7de34398eaf81999655")
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
 
 sio_server = socketio.AsyncServer(
     async_mode='asgi',
@@ -62,6 +69,9 @@ runner_access_token = '123'
 # User sessions dictionary to store Deepgram connections
 user_sessions = {}
 transcription_tasks = {}
+audio_buffers = {}
+chat_tasks = {}  # Dictionary to store active chat tasks
+chat_stream = ChatStream(sio_server, openai_client, anthropic_client)
 
 
 async def start_transcription(sid):
@@ -97,6 +107,10 @@ async def connect(sid, environ, auth):
     print("Client connected:", sid)
     # Schedule start_transcription to run on the event loop
     transcription_tasks[sid] = asyncio.create_task(start_transcription(sid))
+
+    # Initialize an in-memory buffer for audio data
+    audio_buffers[sid] = BytesIO()
+
     return True
 
 
@@ -114,6 +128,31 @@ async def uplink_stt_audio(sid, audio_data):
     if sid in user_sessions:
         user_sessions[sid].send(audio_data)
 
+        # Append the audio data to the in-memory buffer
+        if sid in audio_buffers:
+            audio_buffers[sid].write(audio_data)
+
+
+@sio_server.event
+async def uplink_chat_message(sid, message_list):
+    print("Received chat message from client:", sid, message_list)
+
+    chat_stream_model = ChatStreamModel(
+        dynamic_auth_code="your_dynamic_auth_code",
+        messages=message_list,
+        current_step=0,
+        agent_id="your_agent_id"
+    )
+
+    # Run stream_chat as an independent task
+    task = asyncio.create_task(chat_stream.stream_chat(chat_stream_model, "openai", 0, "your_agent_id", sid))
+    chat_tasks[sid] = task
+
+    # Add a callback to remove the task from the dictionary once it is done
+    task.add_done_callback(lambda t: chat_tasks.pop(sid, None))
+
+    return True
+
 
 @sio_server.event
 async def disconnect(sid):
@@ -124,6 +163,16 @@ async def disconnect(sid):
     if sid in transcription_tasks:
         transcription_tasks[sid].cancel()
         del transcription_tasks[sid]
+
+    if sid in audio_buffers:
+        # Write the buffer to a file
+        with open(f"{sid}.wav", "wb") as audio_file:
+            audio_file.write(audio_buffers[sid].getvalue())
+        del audio_buffers[sid]
+
+    if sid in chat_tasks:
+        chat_tasks[sid].cancel()
+        del chat_tasks[sid]
     return True
 
 
