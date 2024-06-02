@@ -12,6 +12,8 @@ from pydantic import BaseModel
 from TtsStream import TtsStream
 from PromptManager import PromptManager
 import uuid
+
+
 # from common.AgentPromptHandler import AgentPromptHandler
 
 
@@ -55,8 +57,7 @@ class ChatStream:
     async def stream_chat(self, chat_stream_model: ChatStreamModel, requested_provider, current_step, agent_id, sid):
         messages = self.__messages_processor(chat_stream_model.messages, agent_id, current_step)
         async for message in self.__chat_generator(messages, requested_provider):
-            await self.sio_server.emit("downlink_chat_message",
-                                       {"response": message, "tts_session_id": self.tts_session_id}, room=sid)
+            await self.sio_server.emit("downlink_chat_response", message, room=sid)
 
     async def __chat_generator(self, messages: List[dict[str, str]], requested_provider):
         """
@@ -76,6 +77,7 @@ class ChatStream:
         chunk_id = -1  # chunk_id starts from 0, -1 means no chunk has been created
         sentence_ender = [".", "?", "!"]
         chunk_buffer = ""
+        initiate_new_response = True
         async for text_chunk in stream:
             new_text = text_chunk
             response_text += new_text
@@ -93,15 +95,22 @@ class ChatStream:
                     chunk_buffer += new_text
             else:  # if the chunk is less than 21 words
                 chunk_buffer += new_text
-            yield json.dumps(
-                {"response": response_text, "tts_session_id": self.tts_session_id,
-                 "tts_max_chunk_id": chunk_id})
+            first_yield = False
+            if initiate_new_response:
+                initiate_new_response = False
+                first_yield = True
+            yield {"response": response_text, "tts_session_id": self.tts_session_id, "tts_max_chunk_id": chunk_id, "first_yield": first_yield, "last_yield": False}
         # Process any remaining text in the chunk_buffer after the stream has finished
         if chunk_buffer:
             chunk_id += 1
             self.tts.stream_tts(chunk_buffer, str(chunk_id))
-            yield json.dumps(
-                {"response": response_text, "tts_session_id": self.tts_session_id, "tts_max_chunk_id": chunk_id})
+            first_yield = False
+            if initiate_new_response:
+                initiate_new_response = False
+                first_yield = True
+            yield {"response": response_text, "tts_session_id": self.tts_session_id, "tts_max_chunk_id": chunk_id, "first_yield": first_yield, "last_yield": True}
+        else:
+            yield {"response": response_text, "tts_session_id": self.tts_session_id, "tts_max_chunk_id": chunk_id, "first_yield": False, "last_yield": True}
 
     async def __openai_chat_generator(self, messages: List[dict[str, str]]):
         """

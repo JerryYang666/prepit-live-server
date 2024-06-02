@@ -27,7 +27,6 @@ dg_client = DeepgramClient(api_key="e787517287be850e46fbb7de34398eaf81999655")
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-
 sio_server = socketio.AsyncServer(
     async_mode='asgi',
     cors_allowed_origins=[],
@@ -46,6 +45,7 @@ origins = [
     "http://127.0.0.1:8001",
     "http://127.0.0.1:8000",
     "http://localhost:5173",
+    "http://localhost:4173",
     "https://jerryyang666.github.io",
     "https://os-computational-economics.github.io",
     "http://localhost:63342",
@@ -124,7 +124,7 @@ async def message(sid, data):
 @sio_server.event
 async def uplink_stt_audio(sid, audio_data):
     # This event will be triggered by the frontend to send audio data to Deepgram
-    print("Received audio data from client:", sid)
+    print("Received audio data from client:", sid, "audio_data length:", len(audio_data))
     if sid in user_sessions:
         user_sessions[sid].send(audio_data)
 
@@ -139,7 +139,7 @@ async def uplink_chat_message(sid, message_list):
 
     chat_stream_model = ChatStreamModel(
         dynamic_auth_code="your_dynamic_auth_code",
-        messages=message_list,
+        messages=message_list['messages'],
         current_step=0,
         agent_id="your_agent_id"
     )
@@ -152,6 +152,13 @@ async def uplink_chat_message(sid, message_list):
     task.add_done_callback(lambda t: chat_tasks.pop(sid, None))
 
     return True
+
+
+@sio_server.event
+async def uplink_keep_alive(sid):
+    print("Received keep alive from client:", sid)
+    if sid in user_sessions:
+        user_sessions[sid].send('{ "type": "KeepAlive" }')
 
 
 @sio_server.event
@@ -176,6 +183,6 @@ async def disconnect(sid):
     return True
 
 
-@app.get("/")
+@app.get("/ping")
 async def root():
     return {"message": "Hello World"}
