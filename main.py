@@ -1,6 +1,7 @@
-import json
+import time
 from dotenv import load_dotenv, dotenv_values
-from fastapi import FastAPI
+from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import socketio
 from deepgram import DeepgramClient, LiveTranscriptionEvents, LiveOptions
@@ -10,6 +11,7 @@ import os
 import asyncio
 from io import BytesIO
 from ChatStream import ChatStream, ChatStreamModel
+from TtsStream import TtsStream
 
 DEV_PREFIX = "/dev"
 PROD_PREFIX = "/prod"
@@ -71,7 +73,6 @@ user_sessions = {}
 transcription_tasks = {}
 audio_buffers = {}
 chat_tasks = {}  # Dictionary to store active chat tasks
-chat_stream = ChatStream(sio_server, openai_client, anthropic_client)
 
 
 async def start_transcription(sid):
@@ -143,6 +144,7 @@ async def uplink_chat_message(sid, message_list):
         current_step=0,
         agent_id="your_agent_id"
     )
+    chat_stream = ChatStream(sio_server, openai_client, anthropic_client)
 
     # Run stream_chat as an independent task
     task = asyncio.create_task(chat_stream.stream_chat(chat_stream_model, "openai", 0, "your_agent_id", sid))
@@ -164,6 +166,7 @@ async def uplink_keep_alive(sid):
 @sio_server.event
 async def disconnect(sid):
     print("Client disconnected:", sid)
+    audio_file_folder = "volume_cache/interviewee_recordings"
     if sid in user_sessions:
         user_sessions[sid].finish()  # Close the Deepgram connection
         del user_sessions[sid]  # Remove the session from the dictionary
@@ -172,8 +175,11 @@ async def disconnect(sid):
         del transcription_tasks[sid]
 
     if sid in audio_buffers:
+        # check if the folder exists
+        if not os.path.exists(audio_file_folder):
+            os.makedirs(audio_file_folder)
         # Write the buffer to a file
-        with open(f"{sid}.wav", "wb") as audio_file:
+        with open(f"{audio_file_folder}/{sid}.wav", "wb") as audio_file:
             audio_file.write(audio_buffers[sid].getvalue())
         del audio_buffers[sid]
 
@@ -181,6 +187,37 @@ async def disconnect(sid):
         chat_tasks[sid].cancel()
         del chat_tasks[sid]
     return True
+
+
+def delete_file_after_delay(file_path: str, delay: float):
+    """
+    Deletes the specified file after a delay.
+    :param file_path: The path to the file to delete.
+    :param delay: The delay before deletion, in seconds.
+    """
+    time.sleep(delay)
+    if os.path.isfile(file_path):
+        os.remove(file_path)
+
+
+@app.get(f"{CURRENT_VERSION_PREFIX}{DEV_PREFIX}/tts")
+@app.get(f"{CURRENT_VERSION_PREFIX}{PROD_PREFIX}/tts")
+async def get_tts_file(tts_session_id: str, chunk_id: str, background_tasks: BackgroundTasks):
+    """
+    ENDPOINT: /v1/dev/tts
+    serves the TTS audio file for the specified session id and chunk id.
+    :param tts_session_id:
+    :param chunk_id:
+    :param background_tasks:
+    :return:
+    """
+    file_location = f"{TtsStream.TTS_AUDIO_CACHE_FOLDER}/{tts_session_id}_{chunk_id}.mp3"
+    if os.path.isfile(file_location):
+        # Add the delete_file_after_delay function as a background task
+        background_tasks.add_task(delete_file_after_delay, file_location, 60)  # 60 seconds delay
+        return FileResponse(path=file_location, media_type="audio/mpeg")
+    else:
+        raise HTTPException(status_code=404, detail="File not found")
 
 
 @app.get("/ping")

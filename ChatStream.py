@@ -75,6 +75,7 @@ class ChatStream:
             stream = self.__openai_chat_generator(messages)
         response_text = ""
         chunk_id = -1  # chunk_id starts from 0, -1 means no chunk has been created
+        have_new_chunk = False  # flag to indicate if a new chunk has been created
         sentence_ender = [".", "?", "!"]
         chunk_buffer = ""
         initiate_new_response = True
@@ -85,12 +86,15 @@ class ChatStream:
                 if sentence_ender[0] in new_text and not chunk_buffer[-1].isnumeric():  # if the chunk contains a sentence ender . and the last character is not a number
                     chunk_buffer, chunk_id = self.__process_chunking(sentence_ender[0], new_text, chunk_buffer,
                                                                      chunk_id)
+                    have_new_chunk = True
                 elif sentence_ender[1] in new_text:  # if the chunk contains a sentence ender ?
                     chunk_buffer, chunk_id = self.__process_chunking(sentence_ender[1], new_text, chunk_buffer,
                                                                      chunk_id)
+                    have_new_chunk = True
                 elif sentence_ender[2] in new_text:  # if the chunk contains a sentence ender !
                     chunk_buffer, chunk_id = self.__process_chunking(sentence_ender[2], new_text, chunk_buffer,
                                                                      chunk_id)
+                    have_new_chunk = True
                 else:  # if the chunk does not contain a sentence ender
                     chunk_buffer += new_text
             else:  # if the chunk is less than 21 words
@@ -99,18 +103,24 @@ class ChatStream:
             if initiate_new_response:
                 initiate_new_response = False
                 first_yield = True
-            yield {"response": response_text, "tts_session_id": self.tts_session_id, "tts_max_chunk_id": chunk_id, "first_yield": first_yield, "last_yield": False}
+            yield {"response": response_text, "tts_session_id": self.tts_session_id, "have_new_chunk": have_new_chunk, "new_chunk_id": chunk_id,
+                   "first_yield": first_yield, "last_yield": False}
+            have_new_chunk = False
         # Process any remaining text in the chunk_buffer after the stream has finished
         if chunk_buffer:
             chunk_id += 1
             self.tts.stream_tts(chunk_buffer, str(chunk_id))
+            have_new_chunk = True
             first_yield = False
             if initiate_new_response:
                 initiate_new_response = False
                 first_yield = True
-            yield {"response": response_text, "tts_session_id": self.tts_session_id, "tts_max_chunk_id": chunk_id, "first_yield": first_yield, "last_yield": True}
+            yield {"response": response_text, "tts_session_id": self.tts_session_id, "have_new_chunk": have_new_chunk, "new_chunk_id": chunk_id,
+                   "first_yield": first_yield, "last_yield": True}
+            have_new_chunk = False
         else:
-            yield {"response": response_text, "tts_session_id": self.tts_session_id, "tts_max_chunk_id": chunk_id, "first_yield": False, "last_yield": True}
+            yield {"response": response_text, "tts_session_id": self.tts_session_id, "have_new_chunk": have_new_chunk, "new_chunk_id": chunk_id,
+                   "first_yield": False, "last_yield": True}
 
     async def __openai_chat_generator(self, messages: List[dict[str, str]]):
         """
