@@ -48,19 +48,24 @@ app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
 origins = [
     "http://127.0.0.1:8001",
-    "http://127.0.0.1:8000",
+    "http://localhost:3000",
+    "http://localhost:8000",
     "http://localhost:5173",
-    "http://localhost:4173",
-    "https://jerryyang666.github.io",
-    "https://os-computational-economics.github.io",
-    "http://localhost:63342",
-    "https://file.jerryang.org",
-    "https://coding.coursey.ai",
+    "http://localhost:5172",
+    "http://localhost:5174",
+    "http://127.0.0.1:5173",
+    "https://prepit-user-web.vercel.app",
+    "https://app.prepit.ai",
+    "https://test-app.prepit.ai",
+    "https://prepit.ai",
 ]
+
+regex_origins = "https://.*jerryyang666s-projects\.vercel\.app"
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=regex_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
