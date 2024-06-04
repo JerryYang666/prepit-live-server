@@ -25,7 +25,7 @@ except FileNotFoundError:
 # load secrets from /run/secrets/ (only when running in docker)
 load_dotenv(dotenv_path="/run/secrets/prepit-secret")
 load_dotenv()
-dg_client = DeepgramClient(api_key="e787517287be850e46fbb7de34398eaf81999655")
+dg_client = DeepgramClient(api_key=os.getenv("DEEPGRAM_API_KEY"))
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
