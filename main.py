@@ -91,11 +91,12 @@ async def start_transcription(sid):
 
     # Define event handlers
     def on_message(self, result, **kwargs):
-        print("Received message from Deepgram:", result)
         if result:
             sentence = result.channel.alternatives[0].transcript
             if sentence:
                 # Run sio_server.emit in the event loop
+                print({'text': sentence, 'is_final': result.is_final,
+                       'speech_final': result.speech_final})
                 asyncio.run(sio_server.emit('downlink_stt_result', {'text': sentence, 'is_final': result.is_final,
                                                                     'speech_final': result.speech_final}, room=sid))
 
@@ -167,7 +168,9 @@ async def uplink_chat_message(sid, message_data):
     chat_stream = ChatStream(sio_server, openai_client, anthropic_client)
 
     # Run stream_chat as an independent task
-    task = asyncio.create_task(chat_stream.stream_chat(chat_stream_model, chat_stream_model.provider, chat_stream_model.current_step, chat_stream_model.agent_id, sid))
+    task = asyncio.create_task(
+        chat_stream.stream_chat(chat_stream_model, chat_stream_model.provider, chat_stream_model.current_step,
+                                chat_stream_model.agent_id, sid))
     chat_tasks[sid] = task
 
     # Add a callback to remove the task from the dictionary once it is done
