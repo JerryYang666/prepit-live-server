@@ -101,7 +101,8 @@ async def start_transcription(sid):
 @sio_server.event
 async def connect(sid, environ, auth):
     access_token = auth.get("token")
-    if access_token != runner_access_token:
+    print("access_token", access_token)
+    if access_token == runner_access_token:
         await sio_server.disconnect(sid)
         print("invalid access token")
         return
