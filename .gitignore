@@ -1,2 +1,3 @@
 /.env
 /volume_cache/
+/prepit_edge_volume_local/

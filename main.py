@@ -8,10 +8,12 @@ from deepgram import DeepgramClient, LiveTranscriptionEvents, LiveOptions
 from openai import OpenAI
 from anthropic import Anthropic
 import os
+import re
 import asyncio
 from io import BytesIO
 from ChatStream import ChatStream, ChatStreamModel
 from TtsStream import TtsStream
+from AgentPromptHandler import AgentPromptHandler
 
 DEV_PREFIX = "/dev"
 PROD_PREFIX = "/prod"
@@ -28,6 +30,7 @@ load_dotenv()
 dg_client = DeepgramClient(api_key=os.getenv("DEEPGRAM_API_KEY"))
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+agent_prompt_handler = AgentPromptHandler()
 
 sio_server = socketio.AsyncServer(
     async_mode='asgi',
@@ -102,10 +105,11 @@ async def start_transcription(sid):
 async def connect(sid, environ, auth):
     access_token = auth.get("token")
     print("access_token", access_token)
-    if access_token == runner_access_token:
+    if not check_uuid_format(access_token):
         await sio_server.disconnect(sid)
         print("invalid access token")
         return
+    agent_prompt_handler.cache_agent_all_steps(access_token)
     print("Client connected:", sid)
     # Schedule start_transcription to run on the event loop
     transcription_tasks[sid] = asyncio.create_task(start_transcription(sid))
@@ -114,6 +118,15 @@ async def connect(sid, environ, auth):
     audio_buffers[sid] = BytesIO()
 
     return True
+
+
+def check_uuid_format(uuid: str) -> bool:
+    """
+    Checks if the UUID is in the correct format.
+    :param uuid: The UUID to check.
+    :return: True if the UUID is in the correct format, False otherwise.
+    """
+    return re.match(r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", uuid) is not None
 
 
 @sio_server.event
@@ -136,19 +149,20 @@ async def uplink_stt_audio(sid, audio_data):
 
 
 @sio_server.event
-async def uplink_chat_message(sid, message_list):
-    print("Received chat message from client:", sid, message_list)
+async def uplink_chat_message(sid, message_data):
+    print("Received chat message from client:", sid, message_data)
 
     chat_stream_model = ChatStreamModel(
-        dynamic_auth_code="your_dynamic_auth_code",
-        messages=message_list['messages'],
-        current_step=0,
-        agent_id="your_agent_id"
+        dynamic_auth_code=message_data['dynamic_auth_code'],
+        messages=message_data['messages'],
+        current_step=message_data['current_step'],
+        agent_id=message_data['agent_id'],
+        provider=message_data['provider']
     )
     chat_stream = ChatStream(sio_server, openai_client, anthropic_client)
 
     # Run stream_chat as an independent task
-    task = asyncio.create_task(chat_stream.stream_chat(chat_stream_model, "openai", 0, "your_agent_id", sid))
+    task = asyncio.create_task(chat_stream.stream_chat(chat_stream_model, chat_stream_model.provider, chat_stream_model.current_step, chat_stream_model.agent_id, sid))
     chat_tasks[sid] = task
 
     # Add a callback to remove the task from the dictionary once it is done
@@ -221,6 +235,7 @@ async def get_tts_file(tts_session_id: str, chunk_id: str, background_tasks: Bac
         raise HTTPException(status_code=404, detail="File not found")
 
 
-@app.get("/ping")
-async def root():
+@app.get(f"{CURRENT_VERSION_PREFIX}{DEV_PREFIX}/ping")
+@app.get(f"{CURRENT_VERSION_PREFIX}{PROD_PREFIX}/ping")
+async def ping():
     return {"message": "Hello World"}

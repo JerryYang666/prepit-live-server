@@ -11,6 +11,7 @@ import json
 from pydantic import BaseModel
 from TtsStream import TtsStream
 from PromptManager import PromptManager
+from AgentPromptHandler import AgentPromptHandler
 import uuid
 
 
@@ -53,6 +54,7 @@ class ChatStream:
 
         self.tts_session_id = str(uuid.uuid4())
         self.tts = TtsStream(self.tts_session_id)
+        self.agent_prompt_handler = AgentPromptHandler()
 
     async def stream_chat(self, chat_stream_model: ChatStreamModel, requested_provider, current_step, agent_id, sid):
         messages = self.__messages_processor(chat_stream_model.messages, agent_id, current_step)
@@ -196,12 +198,12 @@ class ChatStream:
                                 Our client is seeking incremental margin in any way shape or form.
                                 4. What is our client’s current footprint?
                                 Our client has significant penetration throughout the US, but not internationally."""}]
-        # current_step = self.agent_prompt_handler.get_agent_prompt(self.agent_id, self.current_step)
-        # current_step_info = {}
-        # if current_step:
-        #     current_step_info = json.loads(current_step)
+        current_step = self.agent_prompt_handler.get_agent_prompt(agent_id, str(current_step))
+        current_step_info = {}
+        if current_step:
+            current_step_info = json.loads(current_step)
         messages_list = [{"role": "system",
-                          "content": f"{PromptManager.BASE_ROLE}"}]  # Please follow this instruction: {current_step_info['instruction']} Here's some information for you, you should not give the info to candidate directly: {current_step_info['information']}"}]
+                          "content": f"{PromptManager.BASE_ROLE} Please follow this instruction: {current_step_info['instruction']} Here's some information for you, you should not give the info to candidate directly: {current_step_info['information']}"}]
         print(messages_list)
         for key in sorted(messages.keys()):
             messages_list.append(messages[key])

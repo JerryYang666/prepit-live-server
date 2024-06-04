@@ -74,6 +74,27 @@ class AgentPromptHandler:
             logging.error(f"Error getting the agent prompt from the database: {e}")
             return None
 
+    def cache_agent_all_steps(self, agent_id: str) -> bool:
+        """
+        Cache all the agent prompts into redis.
+        :param agent_id: The ID of the agent.
+        :return: True if successful, False otherwise.
+        """
+        try:
+            response = self.table.query(
+                KeyConditionExpression=Key('agent_id').eq(agent_id)
+            )
+            if response['Items']:
+                for item in response['Items']:
+                    self.__cache_agent_prompt(agent_id, item['prompt'], item['step'])
+                    logging.info(f"Cached agent prompt for agent {agent_id} at step {item['step']}")
+                return True
+            else:
+                return False
+        except Exception as e:
+            logging.error(f"Error caching all prompts for agent into redis: {e}")
+            return False
+
     def __cache_agent_prompt(self, agent_id: str, prompt: str, step: str) -> bool:
         """
         Cache the agent prompt into redis.
