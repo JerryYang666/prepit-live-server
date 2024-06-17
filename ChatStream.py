@@ -134,8 +134,8 @@ class ChatStream:
                 model="gpt-4o",
                 messages=messages,
                 stream=True,
-                max_tokens=256,
-                temperature=0.92,
+                max_tokens=512,
+                temperature=0.94,
         ) as stream:
             for chunk in stream:
                 if chunk.choices[0].delta.content is not None:
@@ -154,7 +154,7 @@ class ChatStream:
             system_message_content = system_message["content"]
         with self.anthropic_client.messages.stream(
                 system=system_message_content,
-                max_tokens=2048,
+                max_tokens=512,
                 messages=messages,
                 model="claude-3-sonnet-20240229",
         ) as stream:
