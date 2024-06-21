@@ -156,7 +156,7 @@ class ChatStream:
                 system=system_message_content,
                 max_tokens=512,
                 messages=messages,
-                model="claude-3-sonnet-20240229",
+                model="claude-3-5-sonnet-20240620",
         ) as stream:
             for text in stream.text_stream:
                 if text is not None:
