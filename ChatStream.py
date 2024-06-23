@@ -12,7 +12,9 @@ from pydantic import BaseModel
 from TtsStream import TtsStream
 from PromptManager import PromptManager
 from AgentPromptHandler import AgentPromptHandler
+from MessageStorageHandler import MessageStorageHandler
 import uuid
+import time
 
 
 # from common.AgentPromptHandler import AgentPromptHandler
@@ -55,9 +57,20 @@ class ChatStream:
         self.tts_session_id = str(uuid.uuid4())
         self.tts = TtsStream(self.tts_session_id)
         self.agent_prompt_handler = AgentPromptHandler()
+        self.user_message_timestamp = str(int(time.time() * 1000))  # unix timestamp in milliseconds
+        self.message_storage_handler = MessageStorageHandler()
+        self.thread_id = None
+        self.user_id = None
+        self.user_message_content = None
+        self.step_id = None
 
-    async def stream_chat(self, chat_stream_model: ChatStreamModel, requested_provider, current_step, agent_id, sid):
+    async def stream_chat(self, chat_stream_model: ChatStreamModel, requested_provider, current_step, agent_id, sid,
+                          user_id):
+        self.user_id = user_id
+        self.thread_id = chat_stream_model.thread_id
+        self.step_id = chat_stream_model.current_step
         messages = self.__messages_processor(chat_stream_model.messages, agent_id, current_step)
+        self.user_message_content = messages[-1]["content"]
         async for message in self.__chat_generator(messages, requested_provider):
             await self.sio_server.emit("downlink_chat_response", message, room=sid)
 
@@ -105,7 +118,8 @@ class ChatStream:
             if initiate_new_response:
                 initiate_new_response = False
                 first_yield = True
-            yield {"response": response_text, "tts_session_id": self.tts_session_id, "have_new_chunk": have_new_chunk, "new_chunk_id": chunk_id,
+            yield {"response": response_text, "tts_session_id": self.tts_session_id, "have_new_chunk": have_new_chunk,
+                   "new_chunk_id": chunk_id,
                    "first_yield": first_yield, "last_yield": False}
             have_new_chunk = False
         # Process any remaining text in the chunk_buffer after the stream has finished
@@ -117,12 +131,19 @@ class ChatStream:
             if initiate_new_response:
                 initiate_new_response = False
                 first_yield = True
-            yield {"response": response_text, "tts_session_id": self.tts_session_id, "have_new_chunk": have_new_chunk, "new_chunk_id": chunk_id,
+            yield {"response": response_text, "tts_session_id": self.tts_session_id, "have_new_chunk": have_new_chunk,
+                   "new_chunk_id": chunk_id,
                    "first_yield": first_yield, "last_yield": True}
             have_new_chunk = False
         else:
-            yield {"response": response_text, "tts_session_id": self.tts_session_id, "have_new_chunk": have_new_chunk, "new_chunk_id": chunk_id,
+            yield {"response": response_text, "tts_session_id": self.tts_session_id, "have_new_chunk": have_new_chunk,
+                   "new_chunk_id": chunk_id,
                    "first_yield": False, "last_yield": True}
+        # finally store human and AI message into AWS dynamo db
+        self.message_storage_handler.put_message(self.thread_id, self.user_id, "human", self.user_message_content,
+                                                 self.step_id, self.user_message_timestamp)
+        self.message_storage_handler.put_message(self.thread_id, self.user_id, requested_provider, response_text,
+                                                 self.step_id)
 
     async def __openai_chat_generator(self, messages: List[dict[str, str]]):
         """

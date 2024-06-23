@@ -1,3 +1,4 @@
+import hashlib
 import time
 from dotenv import load_dotenv, dotenv_values
 from fastapi import FastAPI, BackgroundTasks, HTTPException
@@ -14,6 +15,7 @@ from io import BytesIO
 from ChatStream import ChatStream, ChatStreamModel
 from TtsStream import TtsStream
 from AgentPromptHandler import AgentPromptHandler
+import requests
 
 DEV_PREFIX = "/dev"
 PROD_PREFIX = "/prod"
@@ -81,6 +83,7 @@ user_sessions = {}
 transcription_tasks = {}
 audio_buffers = {}
 chat_tasks = {}  # Dictionary to store active chat tasks
+user_ids = {}  # Dictionary to store user IDs
 
 
 async def start_transcription(sid):
@@ -107,14 +110,36 @@ async def start_transcription(sid):
     user_sessions[sid] = dg_connection
 
 
+def generate_dynamic_auth_code():
+    step = 30  # dynamic auth token 30 seconds window
+    salt = "prepit_jerry_salt"  # Salt for the dynamic auth token
+    time_step = int(time.time() // step)
+    time_based_key = str(time_step) + salt  # Combine time step with salt
+    return hashlib.sha256(time_based_key.encode()).hexdigest()
+
+
 @sio_server.event
 async def connect(sid, environ, auth):
     access_token = auth.get("token")
-    print("access_token", access_token)
-    if not check_uuid_format(access_token):
-        await sio_server.disconnect(sid)
-        print("invalid access token")
-        return
+    print("checking interview ID: ", access_token)
+    if check_uuid_format(access_token):
+        # send a post request to the backend to check if the interview ID is valid
+        # the post body should be {thread_id: str, dynamic_auth_code: str}
+        response = requests.post("https://api.prepit-ai.com/v1/prod/admin/threads/validate_id",
+                                 json={"thread_id": access_token,
+                                       "dynamic_auth_code": generate_dynamic_auth_code()})
+        if response.status_code == 200:
+            agent_id = response.json().get("data").get("agent_id")
+            user_id = response.json().get("data").get("user_id")
+            user_ids[sid] = user_id
+            print("agent_id:", agent_id)
+            await sio_server.emit("downlink_interview_id_check_success", room=sid, data={"agent_id": agent_id})
+            print("valid interview ID:", access_token)
+        else:
+            await sio_server.emit("downlink_interview_id_check_fail", room=sid)
+            await sio_server.disconnect(sid)
+            print("invalid interview ID:", access_token)
+            return False
     agent_prompt_handler.cache_agent_all_steps(access_token)
     print("Client connected:", sid)
     # Schedule start_transcription to run on the event loop
@@ -166,11 +191,12 @@ async def uplink_chat_message(sid, message_data):
         provider=message_data['provider']
     )
     chat_stream = ChatStream(sio_server, openai_client, anthropic_client)
+    user_id = user_ids[sid] if sid in user_ids else "0"
 
     # Run stream_chat as an independent task
     task = asyncio.create_task(
         chat_stream.stream_chat(chat_stream_model, chat_stream_model.provider, chat_stream_model.current_step,
-                                chat_stream_model.agent_id, sid))
+                                chat_stream_model.agent_id, sid, user_id))
     chat_tasks[sid] = task
 
     # Add a callback to remove the task from the dictionary once it is done
@@ -196,6 +222,8 @@ async def disconnect(sid):
     if sid in transcription_tasks:
         transcription_tasks[sid].cancel()
         del transcription_tasks[sid]
+    if sid in user_ids:
+        del user_ids[sid]
 
     if sid in audio_buffers:
         # check if the folder exists
