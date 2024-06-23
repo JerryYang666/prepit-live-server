@@ -188,7 +188,8 @@ async def uplink_chat_message(sid, message_data):
         messages=message_data['messages'],
         current_step=message_data['current_step'],
         agent_id=message_data['agent_id'],
-        provider=message_data['provider']
+        provider=message_data['provider'],
+        thread_id=message_data['thread_id']
     )
     chat_stream = ChatStream(sio_server, openai_client, anthropic_client)
     user_id = user_ids[sid] if sid in user_ids else "0"
