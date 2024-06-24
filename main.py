@@ -90,7 +90,7 @@ user_ids = {}  # Dictionary to store user IDs
 async def start_transcription(sid):
     # Create and configure the Deepgram connection
     dg_connection = dg_client.listen.live.v("1")
-    options = LiveOptions(model="nova-2", language="en-US", interim_results=True, smart_format=True, endpointing='700',
+    options = LiveOptions(model="nova-2", language="en-US", interim_results=True, smart_format=True, endpointing='600',
                           utterance_end_ms='1000', filler_words=True)
 
     # Define event handlers
@@ -141,15 +141,16 @@ async def connect(sid, environ, auth):
             await sio_server.disconnect(sid)
             print("invalid interview ID:", access_token)
             return False
-    agent_prompt_handler.cache_agent_all_steps(access_token)
-    print("Client connected:", sid)
-    # Schedule start_transcription to run on the event loop
-    transcription_tasks[sid] = asyncio.create_task(start_transcription(sid))
+        agent_prompt_handler.cache_agent_all_steps(agent_id)
+        print("Client connected:", sid)
+        # Schedule start_transcription to run on the event loop
+        transcription_tasks[sid] = asyncio.create_task(start_transcription(sid))
 
-    # Initialize an in-memory buffer for audio data
-    audio_buffers[sid] = BytesIO()
+        # Initialize an in-memory buffer for audio data
+        audio_buffers[sid] = BytesIO()
 
-    return True
+        return True
+    return False
 
 
 def check_uuid_format(uuid: str) -> bool:
