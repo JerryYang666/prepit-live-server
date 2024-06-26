@@ -1,5 +1,6 @@
 import hashlib
 import time
+import json
 from dotenv import load_dotenv, dotenv_values
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
@@ -85,6 +86,10 @@ transcription_tasks = {}
 audio_buffers = {}
 chat_tasks = {}  # Dictionary to store active chat tasks
 user_ids = {}  # Dictionary to store user IDs
+thread_ids = {}  # Dictionary to store thread IDs
+recording_processing_data_packets = {}  # Dictionary to store recording processing data packets
+
+last_audio_data_received_timestamp = {}  # Dictionary to store the last audio data received timestamp
 
 
 async def start_transcription(sid):
@@ -99,10 +104,11 @@ async def start_transcription(sid):
             sentence = result.channel.alternatives[0].transcript
             if sentence:
                 # Run sio_server.emit in the event loop
-                print({'text': sentence, 'is_final': result.is_final,
-                       'speech_final': result.speech_final})
-                asyncio.run(sio_server.emit('downlink_stt_result', {'text': sentence, 'is_final': result.is_final,
-                                                                    'speech_final': result.speech_final}, room=sid))
+                parsed_result = {'text': sentence, 'is_final': result.is_final, 'speech_final': result.speech_final,
+                                 'start': result.start, 'duration': result.duration,
+                                 'timestamp': get_unix_timestamp_ms()}
+                asyncio.run(sio_server.emit('downlink_stt_result', parsed_result, room=sid))
+                recording_processing_data_packets[sid]["audio_timestamps"].append(parsed_result)
 
     dg_connection.on(LiveTranscriptionEvents.Transcript, on_message)
 
@@ -119,6 +125,14 @@ def generate_dynamic_auth_code():
     return hashlib.sha256(time_based_key.encode()).hexdigest()
 
 
+def get_unix_timestamp_ms() -> int:
+    """
+    Get the current Unix timestamp in milliseconds.
+    :return: The current Unix timestamp in milliseconds.
+    """
+    return int(time.time() * 1000)
+
+
 @sio_server.event
 async def connect(sid, environ, auth):
     access_token = auth.get("token")
@@ -133,6 +147,16 @@ async def connect(sid, environ, auth):
             agent_id = response.json().get("data").get("agent_id")
             user_id = response.json().get("data").get("user_id")
             user_ids[sid] = user_id
+            thread_ids[sid] = access_token
+            recording_processing_data_packets[sid] = {
+                "thread_id": access_token,
+                "ws_conn_sid": sid,
+                "ws_conn_started": get_unix_timestamp_ms(),
+                "audio_started": False,
+                "audio_timestamps": [],
+                "audio_pause_timestamps": [],
+                "user_msg_timestamps": {},
+            }  # Initialize the data packet
             print("agent_id:", agent_id)
             await sio_server.emit("downlink_interview_id_check_success", room=sid, data={"agent_id": agent_id})
             print("valid interview ID:", access_token)
@@ -175,6 +199,14 @@ async def uplink_stt_audio(sid, audio_data):
     print("Received audio data from client:", sid, "audio_data length:", len(audio_data))
     if sid in user_sessions:
         user_sessions[sid].send(audio_data)
+        if sid in recording_processing_data_packets and not recording_processing_data_packets[sid]["audio_started"]:
+            recording_processing_data_packets[sid]["audio_started"] = True
+            recording_processing_data_packets[sid]["audio_started_at"] = get_unix_timestamp_ms()
+        last_audio = last_audio_data_received_timestamp.get(sid, 0)
+        time_now = get_unix_timestamp_ms()
+        last_audio_data_received_timestamp[sid] = time_now
+        if last_audio != 0 and time_now - last_audio > 1500:
+            recording_processing_data_packets[sid]["audio_pause_timestamps"].append([last_audio, time_now])
 
         # Append the audio data to the in-memory buffer
         if sid in audio_buffers:
@@ -194,6 +226,9 @@ async def uplink_chat_message(sid, message_data):
         thread_id=message_data['thread_id']
     )
     chat_stream = ChatStream(sio_server, openai_client, anthropic_client)
+    user_msg_timestamp = chat_stream.user_message_timestamp
+    user_msg_id = message_data['thread_id'][:8] + '#' + str(user_msg_timestamp)
+    recording_processing_data_packets[sid]["user_msg_timestamps"][user_msg_timestamp] = user_msg_id
     user_id = user_ids[sid] if sid in user_ids else "0"
 
     # Run stream_chat as an independent task
@@ -227,15 +262,28 @@ async def disconnect(sid):
         del transcription_tasks[sid]
     if sid in user_ids:
         del user_ids[sid]
+    if sid in last_audio_data_received_timestamp:
+        del last_audio_data_received_timestamp[sid]
 
-    if sid in audio_buffers:
+    if sid in audio_buffers and audio_buffers[sid].getbuffer().nbytes > 0:
         # check if the folder exists
         if not os.path.exists(audio_file_folder):
             os.makedirs(audio_file_folder)
+        # get the current thread id and concatenate it with the sid
+        recording_id = thread_ids[sid][0:8] + "_" + sid
         # Write the buffer to a file
-        with open(f"{audio_file_folder}/{sid}.wav", "wb") as audio_file:
+        with open(f"{audio_file_folder}/{recording_id}.wav", "wb") as audio_file:
             audio_file.write(audio_buffers[sid].getvalue())
+
+        if sid in recording_processing_data_packets:
+            recording_processing_data_packets[sid]["ws_conn_finished"] = get_unix_timestamp_ms()
+            recording_processing_data_packets[sid]["recording_id"] = recording_id
+            # Save the recording processing data packet to a json file
+            with open(f"{audio_file_folder}/{recording_id}.json", "w") as data_file:
+                json.dump(recording_processing_data_packets[sid], data_file)
+            del recording_processing_data_packets[sid]
         del audio_buffers[sid]
+        del thread_ids[sid]
 
     if sid in chat_tasks:
         chat_tasks[sid].cancel()
