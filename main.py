@@ -272,16 +272,22 @@ async def disconnect(sid):
         # get the current thread id and concatenate it with the sid
         recording_id = thread_ids[sid][0:8] + "_" + sid
         # Write the buffer to a file
-        with open(f"{audio_file_folder}/{recording_id}.wav", "wb") as audio_file:
+        wav_file_path = f"{audio_file_folder}/{recording_id}.wav"
+        with open(wav_file_path, "wb") as audio_file:
             audio_file.write(audio_buffers[sid].getvalue())
 
         if sid in recording_processing_data_packets:
             recording_processing_data_packets[sid]["ws_conn_finished"] = get_unix_timestamp_ms()
             recording_processing_data_packets[sid]["recording_id"] = recording_id
             # Save the recording processing data packet to a json file
-            with open(f"{audio_file_folder}/{recording_id}.json", "w") as data_file:
+            json_file_path = f"{audio_file_folder}/{recording_id}.json"
+            with open(json_file_path, "w") as data_file:
                 json.dump(recording_processing_data_packets[sid], data_file)
             del recording_processing_data_packets[sid]
+
+            # Submit the files for processing
+            submit_files_for_processing(wav_file_path, json_file_path, thread_ids[sid], sid)
+
         del audio_buffers[sid]
         del thread_ids[sid]
 
@@ -289,6 +295,35 @@ async def disconnect(sid):
         chat_tasks[sid].cancel()
         del chat_tasks[sid]
     return True
+
+
+def submit_files_for_processing(wav_file_path: str, json_file_path: str, thread_id: str, ws_sid: str):
+    url = "http://code-runner-node-0.courseyai.com:6050/new_audio_processing_task"
+
+    # Open the files to upload
+    files = {
+        'metadata_file': open(json_file_path, 'rb'),
+        'wav_file': open(wav_file_path, 'rb'),
+    }
+
+    # Define additional string parameters
+    data = {
+        'thread_id': thread_id,
+        'ws_sid': ws_sid,
+        'dynamic_auth_token': generate_dynamic_auth_code(),
+    }
+
+    try:
+        # Send the POST request with the files and additional parameters
+        response = requests.post(url, files=files, data=data)
+
+        # Check if the request was successful
+        if response.status_code != 200:
+            print(f"Failed to submit files for processing: {response.text}")
+        else:
+            print(f"Files submitted for processing: {response.text}")
+    except Exception as e:
+        print(f"Failed to submit files for processing: {e}")
 
 
 def delete_file_after_delay(file_path: str, delay: float):
