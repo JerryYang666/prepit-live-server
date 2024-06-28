@@ -8,6 +8,7 @@
 """
 import requests
 import os
+import re
 
 import time
 from dotenv import load_dotenv
@@ -31,6 +32,9 @@ class TtsStream:
             "Authorization": f"Token {self.API_KEY}",
             "Content-Type": "application/json"
         }
+
+        # Process the text to remove anything wrapped in square brackets or curly braces
+        text = re.sub(r"\[.*?]|\{.*?}", "", text)
 
         # Define the payload
         payload = {
