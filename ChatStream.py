@@ -99,9 +99,11 @@ class ChatStream:
             response_text += new_text
             if len(chunk_buffer.split()) > (16 + (chunk_id * 13)):  # dynamically adjust the chunk size
                 if sentence_ender[0] in new_text and not chunk_buffer[-1].isnumeric():  # if the chunk contains a sentence ender . and the last character is not a number
-                    chunk_buffer, chunk_id = self.__process_chunking(sentence_ender[0], new_text, chunk_buffer,
-                                                                     chunk_id)
-                    have_new_chunk = True
+                    if not ("{https://" in chunk_buffer and "}" not in chunk_buffer):
+                        # do not split the chunk if it contains a URL that is not fully enclosed in curly braces
+                        chunk_buffer, chunk_id = self.__process_chunking(sentence_ender[0], new_text, chunk_buffer,
+                                                                         chunk_id)
+                        have_new_chunk = True
                 elif sentence_ender[1] in new_text:  # if the chunk contains a sentence ender ?
                     chunk_buffer, chunk_id = self.__process_chunking(sentence_ender[1], new_text, chunk_buffer,
                                                                      chunk_id)
