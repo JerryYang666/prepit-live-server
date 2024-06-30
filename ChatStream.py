@@ -202,6 +202,8 @@ class ChatStream:
         """
         chunk_id += 1
         new_text_split = new_text.split(sentence_ender)
+        print(f"new_text_split: {new_text_split}")
+        print(f"sentence_ender: {sentence_ender}")
         chunk_buffer += new_text_split[0] + sentence_ender
         self.tts.stream_tts(chunk_buffer, str(chunk_id))
         chunk_buffer = sentence_ender.join(new_text_split[1:])
