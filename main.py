@@ -335,6 +335,8 @@ def submit_feedback_for_processing(messages: dict, thread_id: str, agent_id: str
     last_msg_key = len(messages) - 1
     second_last_msg_key = last_msg_key - 1
     feedback_folder = "volume_cache/feedback"
+    last_msg_key = str(last_msg_key)
+    second_last_msg_key = str(second_last_msg_key)
 
     # check if the user finished one step by comparing the step of the last message with the step of the second last message
     if len(messages) > 1 and messages[last_msg_key]['step'] == messages[second_last_msg_key]['step'] + 1:
@@ -343,7 +345,7 @@ def submit_feedback_for_processing(messages: dict, thread_id: str, agent_id: str
         step_to_process = messages[second_last_msg_key]['step']
 
         # filter out the messages to process
-        messages_to_process = {k: v for k, v in messages.items() if v['step'] == step_to_process}
+        messages_to_process = {int(k): v for k, v in messages.items() if v['step'] == step_to_process}
 
         # make sure feedback folder exists
         if not os.path.exists(feedback_folder):
