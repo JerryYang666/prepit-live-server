@@ -22,7 +22,7 @@ import time
 
 class ChatStreamModel(BaseModel):
     dynamic_auth_code: str
-    messages: dict[int, dict[str, str]]
+    messages: dict[int, dict[str, str | int]]
     current_step: int
     agent_id: str
     thread_id: str | None = None
