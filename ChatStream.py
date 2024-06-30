@@ -15,6 +15,7 @@ from AgentPromptHandler import AgentPromptHandler
 from MessageStorageHandler import MessageStorageHandler
 import uuid
 import time
+import re
 
 
 # from common.AgentPromptHandler import AgentPromptHandler
@@ -125,7 +126,9 @@ class ChatStream:
                    "first_yield": first_yield, "last_yield": False}
             have_new_chunk = False
         # Process any remaining text in the chunk_buffer after the stream has finished
-        if chunk_buffer:
+        test_chunk_buffer = chunk_buffer.strip()
+        test_chunk_buffer = re.sub(r"\[.*?]|\{.*?}", "", test_chunk_buffer)
+        if chunk_buffer and test_chunk_buffer:
             chunk_id += 1
             self.tts.stream_tts(chunk_buffer, str(chunk_id))
             have_new_chunk = True

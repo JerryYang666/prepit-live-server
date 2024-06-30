@@ -196,7 +196,10 @@ async def message(sid, data):
 @sio_server.event
 async def uplink_stt_audio(sid, audio_data):
     # This event will be triggered by the frontend to send audio data to Deepgram
-    print("Received audio data from client:", sid, "audio_data length:", len(audio_data))
+    audio_length = len(audio_data)
+    # only print log if length is divisible by 5
+    if audio_length % 5 == 0:
+        print("Received audio data from client:", sid, "audio_data length:", audio_length)
     if sid in user_sessions:
         user_sessions[sid].send(audio_data)
         if sid in recording_processing_data_packets and not recording_processing_data_packets[sid]["audio_started"]:
