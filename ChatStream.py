@@ -229,5 +229,5 @@ class ChatStream:
                           "content": f"{PromptManager.BASE_ROLE} Please follow this instruction: {current_step_info['instruction']} Here's some information for you, you should not give the info to candidate directly: {current_step_info['information']}"}]
         print(messages_list)
         for key in sorted(messages.keys()):
-            messages_list.append(messages[key])
+            messages_list.append({"role": messages[key]["role"], "content": messages[key]["content"]})
         return messages_list
