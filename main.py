@@ -276,7 +276,7 @@ async def disconnect(sid):
         with open(wav_file_path, "wb") as audio_file:
             audio_file.write(audio_buffers[sid].getvalue())
 
-        if sid in recording_processing_data_packets:
+        if sid in recording_processing_data_packets and recording_processing_data_packets[sid]["user_msg_timestamps"]:  # Check if there are user messages
             recording_processing_data_packets[sid]["ws_conn_finished"] = get_unix_timestamp_ms()
             recording_processing_data_packets[sid]["recording_id"] = recording_id
             # Save the recording processing data packet to a json file
