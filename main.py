@@ -240,6 +240,8 @@ async def uplink_chat_message(sid, message_data):
     # Add a callback to remove the task from the dictionary once it is done
     task.add_done_callback(lambda t: chat_tasks.pop(sid, None))
 
+    submit_feedback_for_processing(message_data['messages'], message_data['thread_id'], message_data['agent_id'])
+
     return True
 
 
@@ -324,6 +326,59 @@ def submit_files_for_processing(wav_file_path: str, json_file_path: str, thread_
             print(f"Files submitted for processing: {response.text}")
     except Exception as e:
         print(f"Failed to submit files for processing: {e}")
+
+
+def submit_feedback_for_processing(messages: dict, thread_id: str, agent_id: str):
+    if not messages:
+        return
+
+    last_msg_key = len(messages) - 1
+    second_last_msg_key = last_msg_key - 1
+    feedback_folder = "volume_cache/feedback"
+
+    # check if the user finished one step by comparing the step of the last message with the step of the second last message
+    if len(messages) > 1 and messages[last_msg_key]['step'] == messages[second_last_msg_key]['step'] + 1:
+        url = "http://code-runner-node-0.courseyai.com:6050/new_feedback_processing_task"
+
+        step_to_process = messages[second_last_msg_key]['step']
+
+        # filter out the messages to process
+        messages_to_process = {k: v for k, v in messages.items() if v['step'] == step_to_process}
+
+        # make sure feedback folder exists
+        if not os.path.exists(feedback_folder):
+            os.makedirs(feedback_folder)
+
+        # Save the messages to a json file
+        feedback_file_path = f"{feedback_folder}/thread{thread_id}_step{str(step_to_process)}.json"
+
+        with open(feedback_file_path, "w") as data_file:
+            json.dump(messages_to_process, data_file)
+
+        # Open the file to upload
+        files = {
+            'messages_file': open(feedback_file_path, 'rb'),
+        }
+
+        # Define additional string parameters
+        data = {
+            'thread_id': thread_id,
+            'agent_id': agent_id,
+            'step_id': messages[second_last_msg_key]['step'],
+            'dynamic_auth_token': generate_dynamic_auth_code(),
+        }
+
+        try:
+            # Send the POST request with the files and additional parameters
+            response = requests.post(url, files=files, data=data)
+
+            # Check if the request was successful
+            if response.status_code != 200:
+                print(f"Failed to submit feedback for processing: {response.text}")
+            else:
+                print(f"Feedback submitted for processing: {response.text}")
+        except Exception as e:
+            print(f"Failed to submit feedback for processing: {e}")
 
 
 def delete_file_after_delay(file_path: str, delay: float):
