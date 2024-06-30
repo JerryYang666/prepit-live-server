@@ -97,6 +97,7 @@ class ChatStream:
         initiate_new_response = True
         async for text_chunk in stream:
             new_text = text_chunk
+            print(f"new_text: {new_text}")
             response_text += new_text
             if len(chunk_buffer.split()) > (16 + (chunk_id * 13)):  # dynamically adjust the chunk size
                 if sentence_ender[0] in new_text and not chunk_buffer[-1].isnumeric():  # if the chunk contains a sentence ender . and the last character is not a number
@@ -128,6 +129,8 @@ class ChatStream:
         # Process any remaining text in the chunk_buffer after the stream has finished
         test_chunk_buffer = chunk_buffer.strip()
         test_chunk_buffer = re.sub(r"\[.*?]|\{.*?}", "", test_chunk_buffer)
+        print(f"test_chunk_buffer: {test_chunk_buffer}")
+        print(f"chunk_buffer: {chunk_buffer}")
         if chunk_buffer and test_chunk_buffer:
             chunk_id += 1
             self.tts.stream_tts(chunk_buffer, str(chunk_id))
