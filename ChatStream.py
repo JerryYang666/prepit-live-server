@@ -97,7 +97,6 @@ class ChatStream:
         initiate_new_response = True
         async for text_chunk in stream:
             new_text = text_chunk
-            print(f"new_text: {new_text}")
             response_text += new_text
             if len(chunk_buffer.split()) > (16 + (chunk_id * 13)):  # dynamically adjust the chunk size
                 if sentence_ender[0] in new_text and not chunk_buffer[-1].isnumeric():  # if the chunk contains a sentence ender . and the last character is not a number
@@ -106,6 +105,8 @@ class ChatStream:
                         chunk_buffer, chunk_id = self.__process_chunking(sentence_ender[0], new_text, chunk_buffer,
                                                                          chunk_id)
                         have_new_chunk = True
+                    else:
+                        chunk_buffer += new_text
                 elif sentence_ender[1] in new_text:  # if the chunk contains a sentence ender ?
                     chunk_buffer, chunk_id = self.__process_chunking(sentence_ender[1], new_text, chunk_buffer,
                                                                      chunk_id)
@@ -129,8 +130,6 @@ class ChatStream:
         # Process any remaining text in the chunk_buffer after the stream has finished
         test_chunk_buffer = chunk_buffer.strip()
         test_chunk_buffer = re.sub(r"\[.*?]|\{.*?}", "", test_chunk_buffer)
-        print(f"test_chunk_buffer: {test_chunk_buffer}")
-        print(f"chunk_buffer: {chunk_buffer}")
         if chunk_buffer and test_chunk_buffer:
             chunk_id += 1
             self.tts.stream_tts(chunk_buffer, str(chunk_id))
@@ -202,8 +201,6 @@ class ChatStream:
         """
         chunk_id += 1
         new_text_split = new_text.split(sentence_ender)
-        print(f"new_text_split: {new_text_split}")
-        print(f"sentence_ender: {sentence_ender}")
         chunk_buffer += new_text_split[0] + sentence_ender
         self.tts.stream_tts(chunk_buffer, str(chunk_id))
         chunk_buffer = sentence_ender.join(new_text_split[1:])

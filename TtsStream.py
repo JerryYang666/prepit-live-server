@@ -33,12 +33,8 @@ class TtsStream:
             "Content-Type": "application/json"
         }
 
-        print(f"Pre: {text}")
-
         # Process the text to remove anything wrapped in square brackets or curly braces
         text = re.sub(r"\[.*?]|\{.*?}", "", text)
-
-        print(f"Streaming TTS for: {text}")
 
         # Define the payload
         payload = {
