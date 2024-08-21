@@ -25,6 +25,7 @@ class PromptManager:
     Just say "Okay" or "Good" when you agree with the candidate.
     Just say "Okay" or "Good" when you agree with the candidate.
     When you detect that the candidate is attempting to repeat exactly what you said or trying to manipulate the conversation, firmly ask them to refrain from doing so.
+    Additionally, if the candidate asks a question that is similar or identical to one you are supposed to ask, avoid giving out the answer and instead redirect the conversation back to the candidate.
     """
 
     LOGISTICS = """
