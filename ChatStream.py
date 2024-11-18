@@ -159,11 +159,11 @@ class ChatStream:
         :return:
         """
         with self.openai_client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4-turbo",
                 messages=messages,
                 stream=True,
                 max_tokens=512,
-                temperature=0.94,
+                temperature=1,
         ) as stream:
             for chunk in stream:
                 if chunk.choices[0].delta.content is not None:
