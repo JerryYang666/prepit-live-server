@@ -159,7 +159,7 @@ class ChatStream:
         :return:
         """
         with self.openai_client.chat.completions.create(
-                model="chatgpt-4o-latest",
+                model="gpt-4o-2024-05-13",
                 messages=messages,
                 stream=True,
                 max_tokens=512,
