@@ -1,3 +1,6 @@
 /.env
 /volume_cache/
 /prepit_edge_volume_local/
+/.idea/
+.DS_Store
+/__pycache__/
