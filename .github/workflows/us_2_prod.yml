@@ -46,11 +46,11 @@ jobs:
             install -m 600 -D /dev/null ~/.ssh/id_rsa
             echo "${{ secrets.US_2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
             ssh-keyscan -H ${{ secrets.US_2_SSH_HOST }} > ~/.ssh/known_hosts
-            ssh ${{ secrets.SSH_USER }}@${{ secrets.US_2_SSH_HOST }} "cd ${{ secrets.WORK_DIR }} && touch ${{ env.SEC_FILE_NAME }} && echo '${{ secrets.SEC }}' > ${{ env.SEC_FILE_NAME }} && exit"
+            ssh ec2-user@${{ secrets.US_2_SSH_HOST }} "cd ${{ secrets.WORK_DIR }} && touch ${{ env.SEC_FILE_NAME }} && echo '${{ secrets.SEC }}' > ${{ env.SEC_FILE_NAME }} && exit"
         - name: connect and pull
-          run: ssh ${{ secrets.SSH_USER }}@${{ secrets.US_2_SSH_HOST }} "echo ${{ secrets.PAT }} | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin && cd ${{ secrets.WORK_DIR }} && docker stop ${{ env.CONTAINER_NAME }} || true | xargs docker rm || true && docker compose pull ${{ env.CONTAINER_NAME }} && docker compose up -d ${{ env.CONTAINER_NAME }} && exit"
+          run: ssh ec2-user@${{ secrets.US_2_SSH_HOST }} "echo ${{ secrets.PAT }} | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin && cd ${{ secrets.WORK_DIR }} && docker stop ${{ env.CONTAINER_NAME }} || true | xargs docker rm || true && docker compose pull ${{ env.CONTAINER_NAME }} && docker compose up -d ${{ env.CONTAINER_NAME }} && exit"
         - name: clean env
-          run: ssh ${{ secrets.SSH_USER }}@${{ secrets.US_2_SSH_HOST }} "cd ${{ secrets.WORK_DIR }} && rm -f ${{ env.SEC_FILE_NAME }} && exit"
+          run: ssh ec2-user@${{ secrets.US_2_SSH_HOST }} "cd ${{ secrets.WORK_DIR }} && rm -f ${{ env.SEC_FILE_NAME }} && exit"
         - name: get time
           run: echo "TIME=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_ENV
         - name: cleanup
