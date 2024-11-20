@@ -420,4 +420,5 @@ async def get_tts_file(tts_session_id: str, chunk_id: str, background_tasks: Bac
 @app.get(f"{CURRENT_VERSION_PREFIX}{DEV_PREFIX}/ping")
 @app.get(f"{CURRENT_VERSION_PREFIX}{PROD_PREFIX}/ping")
 async def ping():
-    return {"message": "Hello World"}
+    connected_users = len(user_sessions)
+    return {"status": connected_users}
