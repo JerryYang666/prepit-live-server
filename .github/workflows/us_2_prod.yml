@@ -1,0 +1,57 @@
+name: prepit-edge-us-2-prod
+on:
+  push:
+    branches:
+      - master
+      - main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/prepit-edge:prod  # change to prod if in production
+  SEC_FILE_NAME: edcwsxqaz
+  CONTAINER_NAME: prepit-edge-prod-server
+
+jobs:
+
+    publish:
+        name: publish image edge prod us-2
+        runs-on: ubuntu-latest
+
+        steps:
+        - id: string
+          uses: ASzc/change-string-case-action@v5
+          with:
+            string: ${{ env.IMAGE_NAME }}
+        - id: updateenv
+          run: echo "IMAGE_NAME=${{ steps.string.outputs.lowercase }}" >> $GITHUB_ENV
+        - uses: actions/checkout@v4
+        - name: Login to ghcr
+          run: |
+            echo ${{ secrets.PAT }} | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+        - name: Build and Publish
+          run: |
+            docker build . --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+            docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+    deploy:
+      needs: publish
+      name: deploy image edge prod us-2
+      runs-on: ubuntu-latest
+
+      steps:
+        - name: install ssh keys
+          # check this thread to understand why its needed:
+          # <https://stackoverflow.com/a/70447517>
+          run: |
+            install -m 600 -D /dev/null ~/.ssh/id_rsa
+            echo "${{ secrets.US_2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+            ssh-keyscan -H ${{ secrets.US_2_SSH_HOST }} > ~/.ssh/known_hosts
+            ssh ${{ secrets.SSH_USER }}@${{ secrets.US_2_SSH_HOST }} "cd ${{ secrets.WORK_DIR }} && touch ${{ env.SEC_FILE_NAME }} && echo '${{ secrets.SEC }}' > ${{ env.SEC_FILE_NAME }} && exit"
+        - name: connect and pull
+          run: ssh ${{ secrets.SSH_USER }}@${{ secrets.US_2_SSH_HOST }} "echo ${{ secrets.PAT }} | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin && cd ${{ secrets.WORK_DIR }} && docker stop ${{ env.CONTAINER_NAME }} || true | xargs docker rm || true && docker compose pull ${{ env.CONTAINER_NAME }} && docker compose up -d ${{ env.CONTAINER_NAME }} && exit"
+        - name: clean env
+          run: ssh ${{ secrets.SSH_USER }}@${{ secrets.US_2_SSH_HOST }} "cd ${{ secrets.WORK_DIR }} && rm -f ${{ env.SEC_FILE_NAME }} && exit"
+        - name: get time
+          run: echo "TIME=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_ENV
+        - name: cleanup
+          run: rm -rf ~/.ssh
