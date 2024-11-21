@@ -1,6 +1,6 @@
 # This is the docker-compose file for in cloud (edge) development and production
 
-version: "1.0.0"
+version: "1.0.1"
 
 services:
   prepit-edge-prod-server:
@@ -14,6 +14,7 @@ services:
       - prodnet
     depends_on:
       - nginx-server
+      - redis-prod-server
   redis-prod-server:
     container_name: redis-prod-server
     image: redis/redis-stack-server:latest

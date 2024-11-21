@@ -2,8 +2,7 @@ name: prepit-edge-us-2-prod
 on:
   push:
     branches:
-      - master
-      - main
+      - archive
 
 env:
   REGISTRY: ghcr.io
