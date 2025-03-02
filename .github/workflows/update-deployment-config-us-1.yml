@@ -1,0 +1,66 @@
+name: Update Deployment Configuration (us-1)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deployment/**"
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  upload-config:
+    name: Upload Configuration Files (us-1)
+    runs-on: ubuntu-latest
+
+    env:
+      DEPLOY_DIR: ${{ secrets.WORK_DIR }}
+      SEC_FILE_NAME: damie-dame # Name of the temporary secrets file, 达咩-だめ
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          install -m 600 -D /dev/null ~/.ssh/id_rsa
+          echo "${{ secrets.US_1_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.US_1_SSH_HOST }} > ~/.ssh/known_hosts
+
+      - name: Create remote directory structure if not exists
+      # files/nginx/conf.d - Nginx configuration files
+      # files/certbot/www - Certbot challenge files
+      # files/certbot/conf - Certbot configuration files and certificates
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.US_1_SSH_HOST }} "mkdir -p ${{ secrets.WORK_DIR }}/files/nginx/conf.d"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.US_1_SSH_HOST }} "mkdir -p ${{ secrets.WORK_DIR }}/files/nginx/ssl"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.US_1_SSH_HOST }} "mkdir -p ${{ secrets.WORK_DIR }}/files/certbot/www"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.US_1_SSH_HOST }} "mkdir -p ${{ secrets.WORK_DIR }}/files/certbot/conf"
+
+      - name: Generate DH parameters if not exists
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.US_1_SSH_HOST }} "test -f ${{ secrets.WORK_DIR }}/files/nginx/ssl/dhparam.pem || openssl dhparam -out ${{ secrets.WORK_DIR }}/files/nginx/ssl/dhparam.pem 2048"
+
+      - name: Copy docker compose
+        run: |
+          scp -r deployment/docker_compose/us-1/* ${{ secrets.SSH_USER }}@${{ secrets.US_1_SSH_HOST }}:${{ secrets.WORK_DIR }}/
+
+      - name: Copy nginx config
+        run: |
+          scp -r deployment/nginx_config/* ${{ secrets.SSH_USER }}@${{ secrets.US_1_SSH_HOST }}:${{ secrets.WORK_DIR }}/files/nginx/conf.d/
+
+      - name: Substitute variables in SSL initialization script
+        run: |
+          # Create a temporary copy of the script with variable substitutions
+          cp deployment/scripts/us-1/ssl-init.sh ssl-init-temp.sh
+          
+          # Replace placeholder variables with actual secrets
+          sed -i "s/\$SSL_EMAIL/${{ secrets.SSL_EMAIL }}/g" ssl-init-temp.sh
+
+      - name: Copy SSL initialization script to server
+        run: |
+          scp ssl-init-temp.sh ${{ secrets.SSH_USER }}@${{ secrets.US_1_SSH_HOST }}:${{ secrets.WORK_DIR }}/ssl-init.sh
+
+      - name: Make SSL script executable and run it
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.US_1_SSH_HOST }} "chmod +x ${{ secrets.WORK_DIR }}/ssl-init.sh"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.US_1_SSH_HOST }} "cd ${{ secrets.WORK_DIR }} && ./ssl-init.sh"
