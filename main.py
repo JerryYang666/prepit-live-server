@@ -95,7 +95,7 @@ last_audio_data_received_timestamp = {}  # Dictionary to store the last audio da
 async def start_transcription(sid):
     # Create and configure the Deepgram connection
     dg_connection = dg_client.listen.live.v("1")
-    options = LiveOptions(model="nova-2", language="en-US", interim_results=True, smart_format=True, endpointing='600',
+    options = LiveOptions(model="nova-3", language="en-US", interim_results=True, smart_format=True, endpointing='600',
                           utterance_end_ms='1000', filler_words=True)
 
     # Define event handlers

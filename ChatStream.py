@@ -159,7 +159,7 @@ class ChatStream:
         :return:
         """
         with self.openai_client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4.5-preview",
                 messages=messages,
                 stream=True,
                 max_tokens=512,
@@ -184,7 +184,7 @@ class ChatStream:
                 system=system_message_content,
                 max_tokens=512,
                 messages=messages,
-                model="claude-3-5-sonnet-latest",
+                model="claude-3-7-sonnet-latest",
         ) as stream:
             for text in stream.text_stream:
                 if text is not None:
