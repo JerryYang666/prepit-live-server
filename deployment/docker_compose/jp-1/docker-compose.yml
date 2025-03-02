@@ -13,7 +13,7 @@ services:
     networks:
       - prodnet
     depends_on:
-      - nginx-server
+      - nginx
       - redis-prod-server
   redis-prod-server:
     container_name: redis-prod-server
