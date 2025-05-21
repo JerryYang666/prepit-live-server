@@ -19,7 +19,7 @@ class TtsStream:
     TtsStream: Text-to-Speech streaming with Deepgram API.
     """
     # Define the API endpoint
-    URL = "https://api.deepgram.com/v1/speak?model=aura-arcas-en"
+    URL = "https://api.deepgram.com/v1/speak?model=aura-2-odysseus-en"
     TTS_AUDIO_CACHE_FOLDER = "volume_cache/tts_audio_cache"
 
     def __init__(self, tts_session_id: str):
